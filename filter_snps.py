@@ -2,6 +2,7 @@
 
 import sys
 import matplotlib.pyplot as plt
+import scipy
 import numpy as np
 import pandas as pd
 from hmmlearn import hmm
@@ -152,11 +153,9 @@ def hmm_sequence(AD, DP, purity):
       
     # decode using BAF matrix
     logprob, decoded_states = model.decode(BAF, algorithm="viterbi")
-    print("Log probability of the sequence:", logprob)
-    print("Decoded sequence of hidden states:", decoded_states)
-
     state_labels = {0: "LOH", 1: "Normal"}
     sequence = []
+
     ### FOR WRITING OUT HMM SEQUENCE ONTO A FILE
     # file1 = open(sequence_file, 'w')
     for state in decoded_states:
@@ -179,7 +178,7 @@ def plot_snps(df):
 
     plt.show()
 
-def filter_snps(vcf_file, outfile, purity, sequence_file):
+def filter_snps(vcf_file, outfile, purity):
     """
     in order to preserve original VCF formatting as much as possible to avoid downstream errors with other programs
     """
@@ -215,7 +214,35 @@ def filter_snps(vcf_file, outfile, purity, sequence_file):
     DP = het_df_snp['DP'].to_numpy()
 
     # pass in AD, DP, purity, start/trans probabilities into hmm function
-    decoded_states = hmm_sequence(AD, DP, purity, sequence_file)
+    decoded_states = hmm_sequence(AD, DP, purity)
+
+    # find indices where decoded_states is "normal"
+    normal_indices = np.where(decoded_states == 1)[0]
+    AD_norm = np.array(AD)[normal_indices]
+    DP_norm = np.array(DP)[normal_indices]
+    norm_count = normal_indices.size
+
+    # initialize counts (for percentages)
+    count_00 = 0
+    count_11 = 0
+
+    # for each "normal" het SNP, change decoded state to 2 if p_val < 0.05
+    # these states are likely falsely-labeled het SNPs
+    for i in range(norm_count):
+        p_value = scipy.stats.binomtest(AD_norm[i], n=DP_norm[i], p=0.5, alternative='two-sided').pvalue
+        curr_BAF = AD_norm[i]/DP_norm[i]
+        if p_value < 0.05:
+            decoded_states[normal_indices[i]] = 2
+            if curr_BAF < 0.5:
+                count_00 += 1
+            else:
+                count_11 += 1
+    
+    # report percentage of Normal hetSNPs that are marked as homo ref vs. homo alt
+    percentage_00 = (count_00 / norm_count) * 100
+    percentage_11 = (count_11 / norm_count) * 100   
+    print(f"Normal -> 0/0: {percentage_00}%")
+    print(f"Normal -> 1/1: {percentage_11}%")
 
     # plots het SNP BAF values
     het_df = pd.DataFrame({'x': het_df_snp["POS"].to_numpy(),
