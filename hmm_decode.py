@@ -48,6 +48,7 @@ def plot_snps(df):
     """
     Creates a scatterplot of het-SNP BAF values.
     """
+    import pdb; pdb.set_trace;
     groups = df.groupby('z')
     for name, group in groups:
         plt.plot(group.x, group.y, marker='o', linestyle='', markersize=0.5, label=name)
@@ -59,7 +60,7 @@ def plot_snps(df):
 
     plt.show()
 
-def hmm_decode(infile, outfile):
+def hmm_decode(infile, outfile, sequence_file):
     """
     Uses Gaussian HMM to decode and return a sequence of hidden states (LOH/normal) of each heterozygous SNP.
     """
@@ -80,15 +81,18 @@ def hmm_decode(infile, outfile):
     BAF = np.array(baf_full).reshape(-1, 1)
 
     # set probability matrices, mean, covariance
-    start_prob = np.array([0.5, 0.5])
-    trans_prob = np.array([[1 - 1/300000000, 1/300000000],
-                           [1/300000000, 1 - 1/300000000]])
-    covariance = np.array([[0.2], [0.2]])
-    mean = np.array([[(1 - 0.8)/(2 - 0.8)], [0.5]]) # random values for init
+    start_prob = np.array([0.2, 0.2, 0.2, 0.2, 0.2])
+    trans_prob = np.array([[1 - 4/30000, 1/30000, 1/30000, 1/30000, 1/30000],
+                           [1/30000, 1 - 4/30000, 1/30000, 1/30000, 1/30000],
+                           [1/30000, 1/30000, 1 - 4/30000, 1/30000, 1/30000],
+                           [1/30000, 1/30000, 1/30000, 1 - 4/30000, 1/30000],
+                           [1/30000, 1/30000, 1/30000, 1/30000, 1 - 4/30000]])
+    covariance = np.array([[0.2], [0.2], [0.2], [0.2], [0.2]])
+    mean = np.array([[0.1], [0.2], [0.3], [0.4], [0.5]]) # random values for init
 
     # create and initialize Gaussian HMM
     model = hmm.GaussianHMM(
-        n_components=2,
+        n_components=5,
         init_params='m',
         params='m'
         )
@@ -103,21 +107,23 @@ def hmm_decode(infile, outfile):
     print(f"means: {model.means_}")
     print(f"covar: {model.covars_}")
 
-    state_labels = {0: "LOH", 1: "Normal"}
+    # state_labels = {0: "LOH", 1: "Normal"}
     sequence = []
 
-    ### write out decoded sequence
-    # for state in decoded_states:
-    #     label = state_labels[state]
-    #     sequence.append(label)
+    file1 = open(sequence_file, 'w')
+    for state in decoded_states:
+        # label = state_labels[state]
+        file1.write(f"{state}, ")
+        # sequence.append(label)
+    file1.close()
 
     # pickle decoded sequence
     with open(outfile, 'wb') as file:
         pickle.dump(decoded_states, file)
         file.close()
-    
+        
     # filter out falsely-labeled het SNPs
-    decoded_states = filter_false_snps(decoded_states, AD, DP)
+    # decoded_states = filter_false_snps(decoded_states, AD, DP)
     
     # plots het SNP BAF values
     het_df = pd.DataFrame({'x': het_df_snp["POS"].to_numpy(),
@@ -125,8 +131,8 @@ def hmm_decode(infile, outfile):
                            'z': decoded_states})
     plot_snps(het_df)
 
-def main(infile, outfile):
-    hmm_decode(infile, outfile)
+def main(infile, outfile, sequence_file):
+    hmm_decode(infile, outfile, sequence_file)
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], sys.argv[3])
