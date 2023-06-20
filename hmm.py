@@ -6,11 +6,9 @@ import pickle
 import torch
 
 import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from hmmlearn import hmm
 from pomegranate.distributions import Normal
 from pomegranate.hmm import DenseHMM
 
