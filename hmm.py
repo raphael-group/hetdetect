@@ -47,7 +47,7 @@ def plot_snps(df, plot_file):
 
 def hmm_decode(infile, outfile, plot_file):
     """
-    Uses Gaussian HMM to decode and return a sequence of hidden states (LOH/normal) of each heterozygous SNP.
+    Decodes and returns a sequence of hidden states (LOH/normal) of each heterozygous SNP using an HMM.
     """
     # unload input df
     with open(infile, 'rb') as file:
@@ -71,24 +71,27 @@ def hmm_decode(infile, outfile, plot_file):
     # set probability matrices, mean, covariance
     start_prob = [0.2, 0.2, 0.2, 0.2, 0.2]
     trans_prob = [[1 - 4/30000, 1/30000, 1/30000, 1/30000, 1/30000],
-                           [1/30000, 1 - 4/30000, 1/30000, 1/30000, 1/30000],
-                           [1/30000, 1/30000, 1 - 4/30000, 1/30000, 1/30000],
-                           [1/30000, 1/30000, 1/30000, 1 - 4/30000, 1/30000],
-                           [1/30000, 1/30000, 1/30000, 1/30000, 1 - 4/30000]]
+                  [1/30000, 1 - 4/30000, 1/30000, 1/30000, 1/30000],
+                  [1/30000, 1/30000, 1 - 4/30000, 1/30000, 1/30000],
+                  [1/30000, 1/30000, 1/30000, 1 - 4/30000, 1/30000],
+                  [1/30000, 1/30000, 1/30000, 1/30000, 1 - 4/30000]]
     dists = [Normal([0.1], [[0.2]], covariance_type='diag'), 
-                      Normal([0.2], [[0.2]], covariance_type='diag'),
-                      Normal([0.3], [[0.2]], covariance_type='diag'),
-                      Normal([0.4], [[0.2]], covariance_type='diag'),
-                      Normal([0.5], [[0.2]], covariance_type='diag')]
+             Normal([0.2], [[0.2]], covariance_type='diag'),
+             Normal([0.3], [[0.2]], covariance_type='diag'),
+             Normal([0.4], [[0.2]], covariance_type='diag'),
+             Normal([0.5], [[0.2]], covariance_type='diag')]
 
     # create and initialize Gaussian HMM
-    model = DenseHMM(distributions=dists, edges=trans_prob, starts=start_prob,
-                random_state=0)
+    model = DenseHMM(distributions=dists, 
+                     edges=trans_prob, 
+                     starts=start_prob,
+                     random_state=0)
 
     # decode using BAF matrix
     # model.fit(BAF) 
     decoded_states = model.predict(BAF).numpy().ravel()
 
+    # re-label decoded_states with mean values
     means_arr = []
     for d in model.distributions:
         means_arr.append(list(d.means.numpy().ravel()))
@@ -98,17 +101,15 @@ def hmm_decode(infile, outfile, plot_file):
                     2: means_arr[2][0], 
                     3: means_arr[3][0], 
                     4: means_arr[4][0]}
-
     sequence = []
-    # # file1 = open(sequence_file, 'w')
+
     for state in decoded_states:
         label = means_labels[state]
-    # #     file1.write(f"{state}, ")
         sequence.append(label)
-    # # file1.close()
+
     decoded_states = sequence
 
-    # pickle decoded sequence
+    # pickle decoded sequence to outfile
     with open(outfile, 'wb') as file:
         pickle.dump(decoded_states, file)
         file.close()
@@ -116,7 +117,7 @@ def hmm_decode(infile, outfile, plot_file):
     # filter out falsely-labeled het SNPs
     decoded_states = filter_false_snps(decoded_states, AD, DP)
 
-    # plots het SNP BAF values
+    # plot het SNP BAF values
     het_df = pd.DataFrame({'x': het_df_snp["POS"].to_numpy(),
                            'y': np.divide(AD, DP),
                            'z': decoded_states})
