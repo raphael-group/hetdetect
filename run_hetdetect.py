@@ -2,6 +2,8 @@ import logging
 import argparse 
 import vcf
 from hetdetect.version import __version__
+from os.path import join
+
 
 if __name__ == "__main__":
 
@@ -28,4 +30,41 @@ if __name__ == "__main__":
             print("hetdetect version " + __version__, flush=True)
             exit(0)                           
 
-    
+    with open(options.input_fp, "r") as input_fp:
+        vcf_reader = vcf.Reader(input_fp)
+
+        if len(vcf_reader.samples) <= 0:
+             logging.INFO("Input VCF does not have existing genotyping. We are taking DP and AD values from INFO field and start calling") 
+        elif len(vcf_reader.samples) > 1:
+             logging.ERROR("We currently only support single sample VCF files")
+             exit(1)
+        else:
+             pass # proceed with execution
+        
+        output_fp = open(join(options.output_fp, "hetdetect.vcf"),"w")
+        vcf_writer = vcf.Writer(output_fp, vcf_reader)
+
+        i = 0
+        #re-genotyping AD > 0 & DP-AD > 0 as 0/1
+        for record in vcf_reader:
+            sample = record.samples[0]
+            REF = sample.data.AD[0]
+            if len(sample.data.AD) > 1:
+                 ALT = sample.data.AD[1]
+            else:
+                 ALT = 0
+
+            if ALT > 0 and REF > 0:
+                GT = "0/1"
+            elif ALT > 0 and REF == 0:
+                GT = "1/1"
+            else:
+                GT = "0/0"
+            
+            CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
+            record.samples[0].data = CallData(GT,DP=sample.data.DP, AD=sample.data.AD)
+            record.FORMAT = "GT:DP:AD"
+            if options.nohmm:
+                vcf_writer.write_record(record)
+
+
