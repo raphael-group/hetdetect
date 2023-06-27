@@ -1,5 +1,7 @@
 import logging
-from argparse 
+import argparse 
+import vcf
+from hetdetect.version import __version__
 
 if __name__ == "__main__":
 
@@ -18,5 +20,12 @@ if __name__ == "__main__":
                                   help="minimum sequencing depth (DP) needed to include in the output VCF file(s)"
                                        , metavar="NUMBER")
     parser.add_argument("-T", "--threads", type=int, dest="num_thread", default=0,
-                                  help="number of cores. " )           
-                                  
+                                  help="number of cores. " )       
+
+    options = parser.parse_args()
+
+    if options.version:
+            print("hetdetect version " + __version__, flush=True)
+            exit(0)                           
+
+    
