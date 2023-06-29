@@ -153,7 +153,7 @@ if __name__ == "__main__":
             p_value = scipy.stats.binomtest(min(AD, DP - AD), 
                             n=DP, 
                             p=model_means[state], 
-                            alternative='less').pvalue
+                            alternative='two-sided').pvalue
             if p_value < 0.05:
                 if AD < DP - AD:
                     newGTs.append("0/0")
