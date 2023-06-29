@@ -43,6 +43,9 @@ def plot_snps(df):
 
     plt.show()
 
+def run_HMM_pomegranade(AD,DP,numstates):
+    pass
+
 def run_HMM(AD,DP,numstates):
         # create 1-D matrix of observed states (BAF) with all values <1 (LAF)
     baf_full = np.divide(AD, DP)
@@ -90,7 +93,7 @@ def hmm_decode(infile, outfile):
     AD = het_df_snp['AD'].to_numpy()
     DP = het_df_snp['DP'].to_numpy()
 
-    logprob, decoded_states, model = hmmrun(AD,DP,5)
+    logprob, decoded_states, model = run_HMM(AD,DP,5)
 
     means_labels = {0: model.means_[0][0], 
                     1: model.means_[1][0], 

@@ -44,12 +44,13 @@ if __name__ == "__main__":
         vcf_reader = vcf.Reader(input_fp)
 
         if len(vcf_reader.samples) <= 0:
-             logging.info("Input VCF does not have existing genotyping. We are taking DP and AD values from INFO field and start calling") 
+            logging.info("Input VCF does not have existing genotyping. We are taking DP and AD values from INFO field and start calling")
+            vcf_reader._column_headers += ["FORMAT", "sample"] 
         elif len(vcf_reader.samples) > 1:
-             logging.ERROR("We currently only support single sample VCF files")
-             exit(1)
+            logging.ERROR("We currently only support single sample VCF files")
+            exit(1)
         else:
-             pass # proceed with execution
+            pass # proceed with execution
         
         #output_fp = open(join(options.output_fp, "hetdetect.vcf"),"w")
         output_main_nohmm_fp = open(join(options.output_fp, "hetdetect.nohmm.vcf"),"w")
@@ -62,6 +63,16 @@ if __name__ == "__main__":
         logging.info("Re-genotyping without HMM")
         #re-genotyping AD > 0 & DP-AD > 0 as 0/1
         for record in vcf_reader:
+            if len(record.samples) == 0:
+                # converting from cellsnplite format to bcftools format temporarily
+                CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
+                DP = int(record.INFO["DP"][0])
+                AD = int(record.INFO["AD"][0])
+                REF = DP - AD
+                record.samples = [vcf.model._Call(record,
+                                                  sample="sample",
+                                                  data=CallData("0/0", DP=DP, AD=[REF, AD]))] # 0/0 is a placeholder
+                record.FORMAT = "GT:DP:AD"
             sample = record.samples[0]
             REF = sample.data.AD[0]
             if sample.data.DP < options.dp_filter:
@@ -80,7 +91,8 @@ if __name__ == "__main__":
             
             # overwrite the Calldata with the new genotype
             CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
-            record.samples[0].data = CallData(GT,DP=sample.data.DP, AD=sample.data.AD)
+            # using cellsnplite format where AD is the alternate allele count only
+            record.samples[0].data = CallData(GT,DP=sample.data.DP, AD=ALT)
             record.FORMAT = "GT:DP:AD"
             vcf_writer.write_record(record)
             # In addition to the main vcf output file, we write each chromosome separately to individual files
@@ -111,12 +123,21 @@ if __name__ == "__main__":
         with open(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"),"r") as f:
             vcf_reader = vcf.Reader(f)
             for record in vcf_reader:
-                 sample = record.samples[0]
-                 # only process het SNPs in HMM
-                 if sample.data.GT == "0/1" or sample.data.GT == "1/0":
-                      hets += [(record.CHROM, record.POS)]
-                      ADs.append(sample.data.AD[1])
-                      DPs.append(sample.data.DP)
+                sample = record.samples[0]
+                # only process het SNPs in HMM
+                if sample.data.GT == "0/1" or sample.data.GT == "1/0":
+                    hets += [(record.CHROM, record.POS)]
+                    # get DP and AD. These can be lists or integers, so being careful here
+                    if type(sample.data.DP) == list:
+                        DP = int(sample.data.DP[0])
+                    else:
+                        DP = int(sample.data.DP)
+                    if type(sample.data.AD) == list:
+                        AD = int(sample.data.AD[0])
+                    else:
+                        AD = int(sample.data.AD)
+                    ADs.append(AD)
+                    DPs.append(DP)
         logging.info(f"Running Baum-Welch for chromosome {k}.")
         ADs = np.array(ADs)
         DPs = np.array(DPs)
