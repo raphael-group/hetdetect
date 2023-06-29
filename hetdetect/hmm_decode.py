@@ -43,6 +43,41 @@ def plot_snps(df):
 
     plt.show()
 
+def run_HMM(AD,DP,numstates):
+        # create 1-D matrix of observed states (BAF) with all values <1 (LAF)
+    baf_full = np.divide(AD, DP)
+    with np.nditer(baf_full, op_flags=['readwrite']) as it:
+        for x in it:
+            if x > 0.5:
+                x[...] = 1 - x
+    BAF = np.array(baf_full).reshape(-1, 1)
+
+    # set probability matrices, mean, covariance
+    start_prob = np.array([1]*numstates)/numstates
+    tau = 1/30000
+    trans_prob = np.full((numstates, numstates), tau)
+    np.fill_diagonal(trans_prob, 1 - (numstates-1) * tau)
+    covariance = np.array([[0.2]]*numstates)
+    #mean = np.array([[0.1], [0.2], [0.3], [0.4], [0.5]])
+
+    # create and initialize Gaussian HMM
+    model = hmm.GaussianHMM(
+        n_components=numstates,
+        init_params='m',
+        params='m')
+    model.startprob_ = start_prob
+    model.transmat_ = trans_prob
+    model.covars_ = covariance
+    #model.means_ = mean
+
+    # decode using BAF matrix
+    model.fit(BAF)
+    logprob, decoded_states = model.decode(BAF, algorithm="viterbi")
+    print(f"means: {model.means_}")
+    print(f"covar: {model.covars_}")
+    
+    return logprob, decoded_states, model
+
 def hmm_decode(infile, outfile):
     """
     Uses Gaussian HMM to decode and return a sequence of hidden states (LOH/normal) of each heterozygous SNP.
@@ -55,39 +90,7 @@ def hmm_decode(infile, outfile):
     AD = het_df_snp['AD'].to_numpy()
     DP = het_df_snp['DP'].to_numpy()
 
-    # create 1-D matrix of observed states (BAF) with all values <1 (LAF)
-    baf_full = np.divide(AD, DP)
-    with np.nditer(baf_full, op_flags=['readwrite']) as it:
-        for x in it:
-            if x > 0.5:
-                x[...] = 1 - x
-    BAF = np.array(baf_full).reshape(-1, 1)
-
-    # set probability matrices, mean, covariance
-    start_prob = np.array([0.2, 0.2, 0.2, 0.2, 0.2])
-    trans_prob = np.array([[1 - 4/30000, 1/30000, 1/30000, 1/30000, 1/30000],
-                           [1/30000, 1 - 4/30000, 1/30000, 1/30000, 1/30000],
-                           [1/30000, 1/30000, 1 - 4/30000, 1/30000, 1/30000],
-                           [1/30000, 1/30000, 1/30000, 1 - 4/30000, 1/30000],
-                           [1/30000, 1/30000, 1/30000, 1/30000, 1 - 4/30000]])
-    covariance = np.array([[0.2], [0.2], [0.2], [0.2], [0.2]])
-    mean = np.array([[0.1], [0.2], [0.3], [0.4], [0.5]])
-
-    # create and initialize Gaussian HMM
-    model = hmm.GaussianHMM(
-        n_components=5,
-        init_params='m',
-        params='m')
-    model.startprob_ = start_prob
-    model.transmat_ = trans_prob
-    model.covars_ = covariance
-    model.means_ = mean
-
-    # decode using BAF matrix
-    model.fit(BAF)
-    logprob, decoded_states = model.decode(BAF, algorithm="viterbi")
-    print(f"means: {model.means_}")
-    print(f"covar: {model.covars_}")
+    logprob, decoded_states, model = hmmrun(AD,DP,5)
 
     means_labels = {0: model.means_[0][0], 
                     1: model.means_[1][0], 

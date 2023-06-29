@@ -1,11 +1,18 @@
 import logging
-import argparse 
+import argparse
+import os 
 import vcf
+import shutil
+from hetdetect.hmm_decode import run_HMM
 from hetdetect.version import __version__
 from os.path import join
+import numpy as np
+import scipy
 
 
 if __name__ == "__main__":
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
 
     # Input arguments parser
     parser = argparse.ArgumentParser(description='VCF file genotyper with increased robustness to allelic imbalance due to mutogenesis',
@@ -21,6 +28,9 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--dpfilter", type=int, dest="dp_filter", default=0,
                                   help="minimum sequencing depth (DP) needed to include in the output VCF file(s)"
                                        , metavar="NUMBER")
+    parser.add_argument("-n", "--numstates", type=int, dest="numstates", default=5,
+                                  help="the number of HMM states to fit the data"
+                                       , metavar="NUMBER")
     parser.add_argument("-T", "--threads", type=int, dest="num_thread", default=0,
                                   help="number of cores. " )       
 
@@ -34,21 +44,28 @@ if __name__ == "__main__":
         vcf_reader = vcf.Reader(input_fp)
 
         if len(vcf_reader.samples) <= 0:
-             logging.INFO("Input VCF does not have existing genotyping. We are taking DP and AD values from INFO field and start calling") 
+             logging.info("Input VCF does not have existing genotyping. We are taking DP and AD values from INFO field and start calling") 
         elif len(vcf_reader.samples) > 1:
              logging.ERROR("We currently only support single sample VCF files")
              exit(1)
         else:
              pass # proceed with execution
         
-        output_fp = open(join(options.output_fp, "hetdetect.vcf"),"w")
-        vcf_writer = vcf.Writer(output_fp, vcf_reader)
+        #output_fp = open(join(options.output_fp, "hetdetect.vcf"),"w")
+        output_main_nohmm_fp = open(join(options.output_fp, "hetdetect.nohmm.vcf"),"w")
+        vcf_writer = vcf.Writer(output_main_nohmm_fp, vcf_reader)
+        if not os.path.exists(join(options.output_fp, "bychrom")):
+            os.mkdir(join(options.output_fp, "bychrom"))
+        bychrom_writers = dict()
 
         i = 0
+        logging.info("Re-genotyping without HMM")
         #re-genotyping AD > 0 & DP-AD > 0 as 0/1
         for record in vcf_reader:
             sample = record.samples[0]
             REF = sample.data.AD[0]
+            if sample.data.DP < options.dp_filter:
+                 continue
             if len(sample.data.AD) > 1:
                  ALT = sample.data.AD[1]
             else:
@@ -61,10 +78,111 @@ if __name__ == "__main__":
             else:
                 GT = "0/0"
             
+            # overwrite the Calldata with the new genotype
             CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
             record.samples[0].data = CallData(GT,DP=sample.data.DP, AD=sample.data.AD)
             record.FORMAT = "GT:DP:AD"
-            if options.nohmm:
+            vcf_writer.write_record(record)
+            # In addition to the main vcf output file, we write each chromosome separately to individual files
+            if record.CHROM not in bychrom_writers:
+                    bc_fp = open(join(options.output_fp, "bychrom",f"{record.CHROM}.nohmm.vcf"),"w")
+                    bychrom_writers[record.CHROM] = vcf.Writer(bc_fp, vcf_reader)
+            bychrom_writers[record.CHROM].write_record(record)
+    
+    vcf_writer.close()
+    for k,v in bychrom_writers.items():
+        v.close()
+
+    if options.nohmm:
+        # move temporary files to output file names since we won't run HMM
+        logging.info("Writing noHMM genotypes into the output file.")
+        shutil.move(join(options.output_fp, "hetdetect.nohmm.vcf"),
+                    join(options.output_fp, "hetdetect.vcf"))
+        for k, _ in bychrom_writers.items():
+            shutil.move(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"),
+                        join(options.output_fp, "bychrom",f"{k}.vcf"))
+        exit(0)
+
+    def hmm_genotyper(k):
+        logging.info(f"HMM genotyping chromosome {k}.")
+        hets = []
+        ADs = []
+        DPs = []
+        with open(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"),"r") as f:
+            vcf_reader = vcf.Reader(f)
+            for record in vcf_reader:
+                 sample = record.samples[0]
+                 # only process het SNPs in HMM
+                 if sample.data.GT == "0/1" or sample.data.GT == "1/0":
+                      hets += [(record.CHROM, record.POS)]
+                      ADs.append(sample.data.AD[1])
+                      DPs.append(sample.data.DP)
+        logging.info(f"Running Baum-Welch for chromosome {k}.")
+        ADs = np.array(ADs)
+        DPs = np.array(DPs)
+        logprob, decoded_states, model= run_HMM(ADs, DPs, options.numstates)
+        model_means = model.means_
+        logging.info(f"Log probability for {k}: {logprob}")
+        logging.info(f"Decoded states for {k}:  {decoded_states}")
+
+        # run binomial test and regenotype het SNPs as homozygous if pvalue is below the threshold
+        # we use the inferred hidden state's mean as binomial test p parameter
+        newGTs = []
+        for AD, DP, state in zip(ADs, DPs, decoded_states):
+            p_value = scipy.stats.binomtest(min(AD, DP - AD), 
+                            n=DP, 
+                            p=model_means[state], 
+                            alternative='less').pvalue
+            if p_value < 0.05:
+                if AD < DP - AD:
+                    newGTs.append("0/0")
+                else:
+                    newGTs.append("1/1")
+            else:
+                newGTs.append("0/1") 
+        
+        newGTdict = dict(zip(hets, newGTs))
+        
+        # write output files by reading the temporrary "nohmm" file and overwrite the genotypes
+        with open(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"),"r") as f:
+            vcf_reader = vcf.Reader(f)
+            output_hmm_fp = open(join(options.output_fp, "bychrom",f"{k}.vcf"),"w")
+            vcf_writer = vcf.Writer(output_hmm_fp, vcf_reader)
+            for record in vcf_reader:
+                index = (record.CHROM, record.POS)
+                if index in newGTdict:
+                    sample = record.samples[0]
+                    CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
+                    record.samples[0].data = CallData(newGTdict[index],DP=sample.data.DP, AD=sample.data.AD)
+                    record.FORMAT = "GT:DP:AD"
                 vcf_writer.write_record(record)
+            vcf_writer.close()
+        logging.info(f"New HMM genotypes are written for chromosome {k}")
+        os.remove(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"))
+                
+
+    # can be made multithreaded using pool
+    for k, _ in bychrom_writers.items():
+        hmm_genotyper(k)
+    
+    logging.info(f"Combining individual chromosome VCFs into one")
+    # combine individual chromosome VCFs and write to the main output VCF
+    with open(join(options.output_fp, "hetdetect.nohmm.vcf"),"r") as output_main_nohmm_fp:
+        vcf_reader = vcf.Reader(output_main_nohmm_fp)
+        output_hmm_fp = open(join(options.output_fp, "hetdetect.vcf"),"w")
+        # using output_main_nohmm_fp header as template
+        vcf_writer = vcf.Writer(output_hmm_fp, vcf_reader)
+        for k in bychrom_writers.keys():
+            with open(join(options.output_fp, "bychrom",f"{k}.vcf"),"r") as f:
+                vcf_reader = vcf.Reader(f)
+                for record in vcf_reader:
+                    vcf_writer.write_record(record)
+        vcf_writer.close()
+    os.remove(join(options.output_fp, "hetdetect.nohmm.vcf"))
+    
+    
+    
+            
+            
 
 
