@@ -10,8 +10,6 @@ from multiprocessing import Pool, cpu_count
 from itertools import repeat
 import os
 
-count = 0
-
 def get_ALT_alleles_from_db(db, chrom):
     """
     Parses a standard VCF file, of format:

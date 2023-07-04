@@ -1,14 +1,19 @@
+"""
+
+HMM built with hmmlearn
+
+"""
+
 #!/bin/python
 
 import sys
 import matplotlib.pyplot as plt
 import scipy
+from pomegranate import *
 import numpy as np
 import pandas as pd
 import pickle
 from hmmlearn import hmm
-from collections import defaultdict
-from itertools import repeat
 
 def filter_false_snps(sequence, AD, DP):
     """
