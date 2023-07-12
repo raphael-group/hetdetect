@@ -2,7 +2,7 @@
 import logging
 import argparse
 import os 
-import vcf
+from cyvcf2 import VCF, Writer
 import shutil
 from hetdetect.hmm_decode import run_HMM
 from hetdetect.version import __version__
@@ -50,7 +50,7 @@ if __name__ == "__main__":
             exit(0)                           
 
 
-    vcf_reader = vcf.Reader(filename=options.input_fp)
+    vcf_reader = VCF(options.input_fp)
 
     if len(vcf_reader.samples) <= 0:
         logging.info("Input VCF does not have existing genotyping. We are taking DP and AD values from INFO field and start calling")
@@ -61,18 +61,26 @@ if __name__ == "__main__":
     else:
         pass # proceed with execution
     
-    #output_fp = open(join(options.output_fp, "hetdetect.vcf"),"w")
-    output_main_nohmm_fp = open(join(options.output_fp, "hetdetect.nohmm.vcf"),"w")
-    vcf_writer = vcf.Writer(output_main_nohmm_fp, vcf_reader)
+    vcf_writer = Writer(join(options.output_fp, "hetdetect.nohmm.vcf"), vcf_reader)
     if not os.path.exists(join(options.output_fp, "bychrom")):
         os.mkdir(join(options.output_fp, "bychrom"))
     bychrom_writers = dict()
 
     i = 0
+
+    def write_record(record):
+        vcf_writer.write_record(record)
+        # In addition to the main vcf output file, we write each chromosome separately to individual files
+        if record.CHROM not in bychrom_writers:
+                bychrom_writers[record.CHROM] = Writer(join(options.output_fp, "bychrom",f"{record.CHROM}.nohmm.vcf"), vcf_reader)
+        bychrom_writers[record.CHROM].write_record(record)
+
     logging.info("Re-genotyping without HMM")
     #re-genotyping AD > 0 & DP-AD > 0 as 0/1
     for record in vcf_reader:
-        if len(record.samples) == 0:
+        if record.num_unknown > 0: # 0 REF and 0 ALT
+            continue
+        if record.num_called == 0:
             # converting from cellsnplite format to bcftools format temporarily
             CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
             DP = int(record.INFO["DP"][0])
@@ -82,34 +90,40 @@ if __name__ == "__main__":
                                                 sample="sample",
                                                 data=CallData("0/0", DP=DP, AD=[REF, AD]))] # 0/0 is a placeholder
             record.FORMAT = "GT:DP:AD"
-        sample = record.samples[0]
-        REF = sample.data.AD[0]
-        if sample.data.DP < options.dp_filter:
-                continue
-        if len(sample.data.AD) > 1:
-                ALT = sample.data.AD[1]
-        else:
-                ALT = 0
 
-        if ALT > 0 and REF > 0:
-            GT = "0/1"
-        elif ALT > 0 and REF == 0:
-            GT = "1/1"
-        else:
-            GT = "0/0"
+        if type(record.INFO.get("AD")) == int:
+            vcf_writer.write_record(record)
+            write_record(record)           
+            continue
+        REF, ALT = record.INFO.get("AD")[0:2]
+        if REF > 0 and ALT > 0:
+            record.genotypes = np.array([[0,1,False]])
+        write_record(record)
+        # sample = record.samples[0]
+        # REF = sample.data.AD[0]
+        # if sample.data.DP < options.dp_filter:
+        #         continue
+        # if len(sample.data.AD) > 1:
+        #         ALT = sample.data.AD[1]
+        # else:
+        #         ALT = 0
+
+        # if ALT > 0 and REF > 0:
+        #     GT = "0/1"
+        # elif ALT > 0 and REF == 0:
+        #     GT = "1/1"
+        # else:
+        #     GT = "0/0"
         
-        # overwrite the Calldata with the new genotype
-        CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
-        # using cellsnplite format where AD is the alternate allele count only
-        record.samples[0].data = CallData(GT,DP=sample.data.DP, AD=ALT)
-        record.FORMAT = "GT:DP:AD"
-        vcf_writer.write_record(record)
-        # In addition to the main vcf output file, we write each chromosome separately to individual files
-        if record.CHROM not in bychrom_writers:
-                bc_fp = open(join(options.output_fp, "bychrom",f"{record.CHROM}.nohmm.vcf"),"w")
-                bychrom_writers[record.CHROM] = vcf.Writer(bc_fp, vcf_reader)
-        bychrom_writers[record.CHROM].write_record(record)
-    
+        # # overwrite the Calldata with the new genotype
+        # CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
+        # # using cellsnplite format where AD is the alternate allele count only
+        # record.samples[0].data = CallData(GT,DP=sample.data.DP, AD=ALT)
+        # record.FORMAT = "GT:DP:AD"
+        # vcf_writer.write_record(record)
+
+        # bychrom_writers[record.CHROM].write_record(record)
+
     vcf_writer.close()
     for k,v in bychrom_writers.items():
         v.close()
@@ -131,21 +145,16 @@ if __name__ == "__main__":
         ADs = []
         DPs = []
         with open(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"),"r") as f:
-            vcf_reader = vcf.Reader(f)
+            vcf_reader = VCF(f)
             for record in vcf_reader:
-                sample = record.samples[0]
+                #sample = record.samples[0]
                 # only process het SNPs in HMM
-                if sample.data.GT == "0/1" or sample.data.GT == "1/0":
+                if record.genotypes[0][0] != record.genotypes[0][1]:
                     hets += [(record.CHROM, record.POS)]
                     # get DP and AD. These can be lists or integers, so being careful here
-                    if type(sample.data.DP) == list:
-                        DP = int(sample.data.DP[0])
-                    else:
-                        DP = int(sample.data.DP)
-                    if type(sample.data.AD) == list:
-                        AD = int(sample.data.AD[0])
-                    else:
-                        AD = int(sample.data.AD)
+                    REF, ALT = record.INFO.get("AD")[0:2]
+                    DP = REF + ALT
+                    AD = ALT
                     ADs.append(AD)
                     DPs.append(DP)
         logging.info(f"Running Baum-Welch for chromosome {k}.")
@@ -166,26 +175,26 @@ if __name__ == "__main__":
                             alternative='two-sided').pvalue
             if p_value < 0.05:
                 if AD < DP - AD:
-                    newGTs.append("0/0")
+                    newGTs.append([0,0,False])
                 else:
-                    newGTs.append("1/1")
+                    newGTs.append([1,1,False])
             else:
-                newGTs.append("0/1") 
+                newGTs.append([0,1,False]) 
         
         newGTdict = dict(zip(hets, newGTs))
         
         # write output files by reading the temporrary "nohmm" file and overwrite the genotypes
         with open(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"),"r") as f:
-            vcf_reader = vcf.Reader(f)
-            output_hmm_fp = open(join(options.output_fp, "bychrom",f"{k}.vcf"),"w")
-            vcf_writer = vcf.Writer(output_hmm_fp, vcf_reader)
+            vcf_reader = VCF(f)
+            vcf_writer = Writer(join(options.output_fp, "bychrom",f"{k}.vcf"), vcf_reader)
             for record in vcf_reader:
                 index = (record.CHROM, record.POS)
                 if index in newGTdict:
-                    sample = record.samples[0]
-                    CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
-                    record.samples[0].data = CallData(newGTdict[index],DP=sample.data.DP, AD=sample.data.AD)
-                    record.FORMAT = "GT:DP:AD"
+                    record.genotypes = np.array([newGTdict[index]])
+                    # sample = record.samples[0]
+                    # CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
+                    # record.samples[0].data = CallData(newGTdict[index],DP=sample.data.DP, AD=sample.data.AD)
+                    # record.FORMAT = "GT:DP:AD"
                 vcf_writer.write_record(record)
             vcf_writer.close()
         logging.info(f"New HMM genotypes are written for chromosome {k}")
@@ -199,13 +208,12 @@ if __name__ == "__main__":
     logging.info(f"Combining individual chromosome VCFs into one")
     # combine individual chromosome VCFs and write to the main output VCF
     with open(join(options.output_fp, "hetdetect.nohmm.vcf"),"r") as output_main_nohmm_fp:
-        vcf_reader = vcf.Reader(output_main_nohmm_fp)
-        output_hmm_fp = open(join(options.output_fp, "hetdetect.vcf"),"w")
+        vcf_reader = VCF(output_main_nohmm_fp)
         # using output_main_nohmm_fp header as template
-        vcf_writer = vcf.Writer(output_hmm_fp, vcf_reader)
+        vcf_writer = Writer(join(options.output_fp, "hetdetect.vcf"), vcf_reader)
         for k in bychrom_writers.keys():
             with open(join(options.output_fp, "bychrom",f"{k}.vcf"),"r") as f:
-                vcf_reader = vcf.Reader(f)
+                vcf_reader = VCF(f)
                 for record in vcf_reader:
                     vcf_writer.write_record(record)
         vcf_writer.close()

@@ -15,6 +15,6 @@ setup(
         author_email='metin@princeton.edu',
         packages=find_packages(),
         zip_safe = False,
-        install_requires=['matplotlib','pandas','pyvcf3','hmmlearn','pomegranate','bgzip'],
+        install_requires=['matplotlib','pandas','cyvcf2','hmmlearn','pomegranate','bgzip'], #drop bgzip
         include_package_data=True
 )
