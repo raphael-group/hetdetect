@@ -209,6 +209,7 @@ if __name__ == "__main__":
                 newGTs.append([0,1,False]) 
         
         newGTdict = dict(zip(hets, newGTs))
+        logging.info("Done with the binomial test")
         
         # write output files by reading the temporrary "nohmm" file and overwrite the genotypes
         with open(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"),"r") as f:
