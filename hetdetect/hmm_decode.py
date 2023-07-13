@@ -3,12 +3,16 @@
 import sys
 import matplotlib.pyplot as plt
 import scipy
+import torch
 import numpy as np
 import pandas as pd
 import pickle
+
 from hmmlearn import hmm
 from collections import defaultdict
 from itertools import repeat
+from pomegranate.distributions import Normal
+from pomegranate.hmm import DenseHMM
 
 def filter_false_snps(sequence, AD, DP):
     """
@@ -43,8 +47,61 @@ def plot_snps(df):
 
     plt.show()
 
-def run_HMM_pomegranade(AD,DP,numstates):
-    pass
+def run_HMM_pgt(AD, DP, numstates):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    # create 1-D matrix of observed states (BAF) with all values <1 (LAF)
+    baf_full = np.divide(AD, DP)
+    with np.nditer(baf_full, op_flags=['readwrite']) as it:
+        for x in it:
+            if x > 0.5:
+                x[...] = 1 - x
+    BAF = torch.tensor(np.array(baf_full).reshape(-1, 39846, 1)).float().to(device)
+
+    # BAF_tensor = tf.convert_to_tensor(BAF)
+    # print(BAF_tensor)
+
+    # set probability matrices, mean, covariance
+    start_prob = torch.tensor(np.array([0.2, 0.2, 0.2, 0.2, 0.2])).float().to(device)
+    trans_prob = torch.tensor(np.array([[1 - 4/30000, 1/30000, 1/30000, 1/30000, 1/30000],
+                  [1/30000, 1 - 4/30000, 1/30000, 1/30000, 1/30000],
+                  [1/30000, 1/30000, 1 - 4/30000, 1/30000, 1/30000],
+                  [1/30000, 1/30000, 1/30000, 1 - 4/30000, 1/30000],
+                  [1/30000, 1/30000, 1/30000, 1/30000, 1 - 4/30000]])).float().to(device)
+    dists = [Normal([0.1], [[0.2]], covariance_type='diag').to(device), 
+             Normal([0.2], [[0.2]], covariance_type='diag').to(device),
+             Normal([0.3], [[0.2]], covariance_type='diag').to(device),
+             Normal([0.4], [[0.2]], covariance_type='diag').to(device),
+             Normal([0.5], [[0.2]], covariance_type='diag').to(device)]
+    
+    print(f"{BAF.dtype}, {start_prob.dtype}, {trans_prob.dtype}")
+
+    # create and initialize Gaussian HMM
+    model = DenseHMM(distributions=dists, 
+                     edges=trans_prob, 
+                     starts=start_prob,
+                     random_state=0).to(device)
+
+    # decode using BAF matrix
+    # model.fit(BAF) 
+    decoded_states = model.predict(BAF)
+    logprob = model.log_probability(decoded_states)
+
+    decoded_states.to('cpu').numpy().ravel()
+    model = model.to('cpu')
+    logprob = logprob.to('cpu')
+
+    # re-label decoded_states with mean values
+    means_arr = []
+    for d in model.distributions:
+        means_arr.append(list(d.means.numpy().ravel()))
+    print(f"means: {means_arr}")
+    # print(f"covar: {model.covars_}") 
+    # (need to figure out how to print covars with pgt)
+
+    # also need to figure out how to get + return "logprob"
+    return logprob, decoded_states, model
+    
 
 def run_HMM(AD,DP,numstates):
         # create 1-D matrix of observed states (BAF) with all values <1 (LAF)

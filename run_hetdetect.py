@@ -4,6 +4,7 @@ import os
 import vcf
 import shutil
 from hetdetect.hmm_decode import run_HMM
+from hetdetect.hmm_decode import run_HMM_pgt
 from hetdetect.version import __version__
 from os.path import join
 import numpy as np
@@ -25,6 +26,8 @@ if __name__ == "__main__":
                                   metavar="DIRECTORY")
     parser.add_argument("--nohmm", dest="nohmm", action='store_true', default=False,
                                   help="turn off hmm genotyping")
+    parser.add_argument("--g", dest="gpu", action='store_true', default=False,
+                                  help="turn on gpu usage")
     parser.add_argument("-f", "--dpfilter", type=int, dest="dp_filter", default=0,
                                   help="minimum sequencing depth (DP) needed to include in the output VCF file(s)"
                                        , metavar="NUMBER")
@@ -51,7 +54,7 @@ if __name__ == "__main__":
             exit(1)
         else:
             pass # proceed with execution
-        
+
         #output_fp = open(join(options.output_fp, "hetdetect.vcf"),"w")
         output_main_nohmm_fp = open(join(options.output_fp, "hetdetect.nohmm.vcf"),"w")
         vcf_writer = vcf.Writer(output_main_nohmm_fp, vcf_reader)
@@ -141,7 +144,10 @@ if __name__ == "__main__":
         logging.info(f"Running Baum-Welch for chromosome {k}.")
         ADs = np.array(ADs)
         DPs = np.array(DPs)
-        logprob, decoded_states, model= run_HMM(ADs, DPs, options.numstates)
+        if options.gpu:
+            logprob, decoded_states, model= run_HMM_pgt(ADs, DPs, options.numstates)
+        else:
+            logprob, decoded_states, model= run_HMM(ADs, DPs, options.numstates)
         model_means = model.means_
         logging.info(f"Log probability for {k}: {logprob}")
         logging.info(f"Decoded states for {k}:  {decoded_states}")
