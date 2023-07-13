@@ -195,11 +195,20 @@ if __name__ == "__main__":
         # run binomial test and regenotype het SNPs as homozygous if pvalue is below the threshold
         # we use the inferred hidden state's mean as binomial test p parameter
         newGTs = []
+
+        testSave = dict()
         for AD, DP, state in zip(ADs, DPs, decoded_states):
-            p_value = scipy.stats.binomtest(min(AD, DP - AD), 
-                            n=DP, 
-                            p=model_means[state], 
-                            alternative='two-sided').pvalue
+            Bk = min(AD, DP - AD)
+            Bn = DP
+            Bp = float(model_means[state])
+            if (Bk,Bn,Bp) in testSave:
+                p_value = testSave[(Bk,Bn,Bp)] 
+            else:
+                p_value = scipy.stats.binomtest(Bk, 
+                                n=Bn, 
+                                p=Bp, 
+                                alternative='two-sided').pvalue
+                testSave[(Bk,Bn,Bp)] = p_value
             if p_value < 0.05:
                 if AD < DP - AD:
                     newGTs.append([0,0,False])
