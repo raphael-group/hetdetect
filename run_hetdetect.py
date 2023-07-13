@@ -56,12 +56,6 @@ if __name__ == "__main__":
     if len(vcf_reader.samples) <= 0:
         logging.info("Input VCF does not have existing genotyping. We are taking DP and AD values from INFO field and start calling")
 
-        # header = """##fileformat=VCFv4.1
-        #             ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
-        #             ##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
-        #             ##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths (high-quality bases)">
-        #             #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample
-        #             """
         header = """##fileformat=VCFv4.1
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
 ##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
