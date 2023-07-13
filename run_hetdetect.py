@@ -52,27 +52,71 @@ if __name__ == "__main__":
 
     vcf_reader = VCF(options.input_fp)
 
+    nosampleinput = False
     if len(vcf_reader.samples) <= 0:
         logging.info("Input VCF does not have existing genotyping. We are taking DP and AD values from INFO field and start calling")
-        vcf_reader._column_headers += ["FORMAT", "sample"] 
+
+        # header = """##fileformat=VCFv4.1
+        #             ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+        #             ##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
+        #             ##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths (high-quality bases)">
+        #             #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample
+        #             """
+        header = """##fileformat=VCFv4.1
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths (high-quality bases)">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
+##INFO=<ID=AD,Number=1,Type=Integer,Description="Allelic depths (high-quality bases)">
+##INFO=<ID=OTH,Number=1,Type=Integer,Description="Other bases">
+##contig=<ID=chr1,length=248956422>
+##contig=<ID=chr2,length=242193529>
+##contig=<ID=chr3,length=198295559>
+##contig=<ID=chr4,length=190214555>
+##contig=<ID=chr5,length=181538259>
+##contig=<ID=chr6,length=170805979>
+##contig=<ID=chr7,length=159345973>
+##contig=<ID=chr8,length=145138636>
+##contig=<ID=chr9,length=138394717>
+##contig=<ID=chr10,length=133797422>
+##contig=<ID=chr11,length=135086622>
+##contig=<ID=chr12,length=133275309>
+##contig=<ID=chr13,length=114364328>
+##contig=<ID=chr14,length=107043718>
+##contig=<ID=chr15,length=101991189>
+##contig=<ID=chr16,length=90338345>
+##contig=<ID=chr17,length=83257441>
+##contig=<ID=chr18,length=80373285>
+##contig=<ID=chr19,length=58617616>
+##contig=<ID=chr20,length=64444167>
+##contig=<ID=chr21,length=46709983>
+##contig=<ID=chr22,length=50818468>
+##contig=<ID=chrX,length=156040895>
+##contig=<ID=chrY,length=57227415>
+##contig=<ID=chrM,length=16569>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample
+"""
+        vcf_writer = Writer.from_string(join(options.output_fp, "hetdetect.nohmm.vcf"), header)
+        nosampleinput = True
     elif len(vcf_reader.samples) > 1:
         logging.ERROR("We currently only support single sample VCF files")
         exit(1)
     else:
-        pass # proceed with execution
+        vcf_writer = Writer(join(options.output_fp, "hetdetect.nohmm.vcf"), vcf_reader)
     
-    vcf_writer = Writer(join(options.output_fp, "hetdetect.nohmm.vcf"), vcf_reader)
     if not os.path.exists(join(options.output_fp, "bychrom")):
         os.mkdir(join(options.output_fp, "bychrom"))
     bychrom_writers = dict()
 
-    i = 0
 
     def write_record(record):
         vcf_writer.write_record(record)
         # In addition to the main vcf output file, we write each chromosome separately to individual files
         if record.CHROM not in bychrom_writers:
-                bychrom_writers[record.CHROM] = Writer(join(options.output_fp, "bychrom",f"{record.CHROM}.nohmm.vcf"), vcf_reader)
+                if nosampleinput:
+                    bychrom_writers[record.CHROM] = Writer.from_string(join(options.output_fp, "bychrom",f"{record.CHROM}.nohmm.vcf"), header)
+                else:
+                    bychrom_writers[record.CHROM] = Writer(join(options.output_fp, "bychrom",f"{record.CHROM}.nohmm.vcf"), vcf_reader)
         bychrom_writers[record.CHROM].write_record(record)
 
     logging.info("Re-genotyping without HMM")
@@ -80,24 +124,47 @@ if __name__ == "__main__":
     for record in vcf_reader:
         if record.num_unknown > 0: # 0 REF and 0 ALT
             continue
-        if record.num_called == 0:
+        if nosampleinput:
+            #save all record fields into separate variables
+            CHROM=record.CHROM
+            POS=record.POS
+            ID="."
+            REF=record.REF
+            ALT=record.ALT[0]
+            QUAL="."
+            FILTER=record.FILTERS[0]
+            DP=record.INFO["DP"]
+            AD=record.INFO["AD"]
+            ADs = [int(DP) - int(AD)]
+            if int(AD) > 0:
+                ADs.append(int(AD))
+            ADstring = ",".join([str(x) for x in ADs])
+            OTH = record.INFO["OTH"]
+            FORMAT="GT:DP:AD"
+            sample=f"0/0:{DP}:{ADstring}"
             # converting from cellsnplite format to bcftools format temporarily
-            CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
-            DP = int(record.INFO["DP"][0])
-            AD = int(record.INFO["AD"][0])
-            REF = DP - AD
-            record.samples = [vcf.model._Call(record,
-                                                sample="sample",
-                                                data=CallData("0/0", DP=DP, AD=[REF, AD]))] # 0/0 is a placeholder
-            record.FORMAT = "GT:DP:AD"
+            record = vcf_writer.variant_from_string(f"{CHROM}\t{POS}\t{ID}\t{REF}\t{ALT}\t{QUAL}\t{FILTER}\tDP={DP};AD={ADstring};OTH={OTH}\t{FORMAT}\t{sample}")
+            # record.FORMAT = ["GT","DP","AD"]
+            # record.genotypes = np.array([[0,0,False]])
+            # CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
+            # DP = int(record.INFO["DP"][0])
+            # AD = int(record.INFO["AD"][0])
+            # REF = DP - AD
+            # record.samples = [vcf.model._Call(record,
+            #                                     sample="sample",
+            #                                     data=CallData("0/0", DP=DP, AD=[REF, AD]))] # 0/0 is a placeholder
+            # record.FORMAT = "GT:DP:AD"
 
         if type(record.INFO.get("AD")) == int:
-            vcf_writer.write_record(record)
             write_record(record)           
             continue
         REF, ALT = record.INFO.get("AD")[0:2]
         if REF > 0 and ALT > 0:
             record.genotypes = np.array([[0,1,False]])
+        elif REF == 0 and ALT > 0:
+            record.genotypes = np.array([[1,1,False]])
+        else:
+            record.genotypes = np.array([[0,0,False]])
         write_record(record)
         # sample = record.samples[0]
         # REF = sample.data.AD[0]
