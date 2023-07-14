@@ -5,7 +5,6 @@ import os
 from cyvcf2 import VCF, Writer
 import shutil
 from hetdetect.hmm_decode import run_HMM
-from hetdetect.hmm_decode import run_HMM_pgt
 from hetdetect.version import __version__
 from os.path import join
 import numpy as np
@@ -33,8 +32,8 @@ if __name__ == "__main__":
                                   metavar="DIRECTORY")
     parser.add_argument("--nohmm", dest="nohmm", action='store_true', default=False,
                                   help="turn off hmm genotyping")
-    parser.add_argument("--g", dest="gpu", action='store_true', default=False,
-                                  help="turn on gpu usage")
+    parser.add_argument("-c", "--compress", dest="compress", action='store_true', default=False,
+                                  help="output compressed VCF files")
     parser.add_argument("-f", "--dpfilter", type=int, dest="dp_filter", default=0,
                                   help="minimum sequencing depth (DP) needed to include in the output VCF file(s)"
                                        , metavar="NUMBER")
@@ -50,47 +49,8 @@ if __name__ == "__main__":
             print("hetdetect version " + __version__, flush=True)
             exit(0)                           
 
-    with open(options.input_fp, "r") as input_fp:
-        vcf_reader = vcf.Reader(input_fp)
-        
-        if len(vcf_reader.samples) <= 0:
-            logging.info("Input VCF does not have existing genotyping. We are taking DP and AD values from INFO field and start calling")
-            vcf_reader._column_headers += ["FORMAT", "sample"] 
-        elif len(vcf_reader.samples) > 1:
-            logging.ERROR("We currently only support single sample VCF files")
-            exit(1)
-        else:
-            pass # proceed with execution
 
-        #output_fp = open(join(options.output_fp, "hetdetect.vcf"),"w")
-        output_main_nohmm_fp = open(join(options.output_fp, "hetdetect.nohmm.vcf"),"w")
-        vcf_writer = vcf.Writer(output_main_nohmm_fp, vcf_reader)
-        if not os.path.exists(join(options.output_fp, "bychrom")):
-            os.mkdir(join(options.output_fp, "bychrom"))
-        bychrom_writers = dict()
-
-        i = 0
-        logging.info("Re-genotyping without HMM")
-        #re-genotyping AD > 0 & DP-AD > 0 as 0/1
-        for record in vcf_reader:
-            if len(record.samples) == 0:
-                # converting from cellsnplite format to bcftools format temporarily
-                CallData = vcf.model.make_calldata_tuple(["GT","DP","AD"])
-                DP = int(record.INFO["DP"][0])
-                AD = int(record.INFO["AD"][0])
-                REF = DP - AD
-                record.samples = [vcf.model._Call(record,
-                                                  sample="sample",
-                                                  data=CallData("0/0", DP=DP, AD=[REF, AD]))] # 0/0 is a placeholder
-                record.FORMAT = "GT:DP:AD"
-            sample = record.samples[0]
-            REF = sample.data.AD[0]
-            if sample.data.DP < options.dp_filter:
-                 continue
-            if len(sample.data.AD) > 1:
-                 ALT = sample.data.AD[1]
-            else:
-                 ALT = 0
+    vcf_reader = VCF(options.input_fp)
 
     nosampleinput = False
     if len(vcf_reader.samples) <= 0:
@@ -227,10 +187,7 @@ if __name__ == "__main__":
         logging.info(f"Running Baum-Welch for chromosome {k}.")
         ADs = np.array(ADs)
         DPs = np.array(DPs)
-        if options.gpu:
-            logprob, decoded_states, model= run_HMM_pgt(ADs, DPs, options.numstates)
-        else:
-            logprob, decoded_states, model= run_HMM(ADs, DPs, options.numstates)
+        logprob, decoded_states, model= run_HMM(ADs, DPs, options.numstates)
         model_means = model.means_
         logging.info(f"Log probability for {k}: {logprob}")
         logging.info(f"Decoded states for {k}:  {decoded_states}")
