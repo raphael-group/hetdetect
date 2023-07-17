@@ -4,11 +4,12 @@ import argparse
 import os 
 from cyvcf2 import VCF, Writer
 import shutil
-from hetdetect.hmm_decode import run_HMM
+from hetdetect.hmm_decode import plot_snps, run_HMM
 from hetdetect.version import __version__
 from os.path import join
 import numpy as np
 import scipy
+import pandas as pd
 
 def compress_output_decision():
     if options.compress:
@@ -51,6 +52,8 @@ if __name__ == "__main__":
 
 
     vcf_reader = VCF(options.input_fp)
+    if not os.path.exists(options.output_fp):
+        os.mkdir(options.output_fp)
 
     nosampleinput = False
     if len(vcf_reader.samples) <= 0:
@@ -197,7 +200,7 @@ if __name__ == "__main__":
         newGTs = []
 
         testSave = dict()
-        for AD, DP, state in zip(ADs, DPs, decoded_states):
+        for j, (AD, DP, state) in enumerate(zip(ADs, DPs, decoded_states)):
             Bk = min(AD, DP - AD)
             Bn = DP
             Bp = float(model_means[state])
@@ -207,18 +210,29 @@ if __name__ == "__main__":
                 p_value = scipy.stats.binomtest(Bk, 
                                 n=Bn, 
                                 p=Bp, 
-                                alternative='two-sided').pvalue
+                                alternative='less').pvalue
                 testSave[(Bk,Bn,Bp)] = p_value
-            if p_value < 0.05:
+            if p_value < 0.025:
                 if AD < DP - AD:
                     newGTs.append([0,0,False])
+                    decoded_states[j] = -1 # mark as false het
                 else:
                     newGTs.append([1,1,False])
+                    decoded_states[j] = -1 # mark as false het  
             else:
                 newGTs.append([0,1,False]) 
         
         newGTdict = dict(zip(hets, newGTs))
         logging.info("Done with the binomial test")
+        # plot het SNPs
+        het_df = pd.DataFrame({'x': np.array([het[1] for het in hets]),
+                    'y': np.divide(ADs, DPs),
+                    'z': decoded_states})
+        # make plots directory
+        if not os.path.exists(join(options.output_fp, "plots")):
+            os.mkdir(join(options.output_fp, "plots"))
+        plot_snps(het_df, join(options.output_fp, 'plots', f'{k}.png'))
+        logging.info(f"Ploted chromosome {k}")
         
         # write output files by reading the temporrary "nohmm" file and overwrite the genotypes
         with open(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"),"r") as f:

@@ -26,14 +26,15 @@ def filter_false_snps(sequence, AD, DP):
             sequence[i] = 5
     return sequence
 
-def plot_snps(df):
+def plot_snps(df, plot_file):
     """
     Creates a scatterplot of het-SNP BAF values.
     """
-    import pdb; pdb.set_trace;
+    #import pdb; pdb.set_trace;
     groups = df.groupby('z')
 
     for name, group in groups:
+        print(name,len(group))
         plt.plot(group.x, group.y, marker='o', linestyle='', markersize=0.5, label=name)
     
     plt.ylim([0, 1])
@@ -41,7 +42,7 @@ def plot_snps(df):
     plt.ylabel("BAF")
     plt.legend(loc='upper left', bbox_to_anchor=(1.04, 1))
 
-    plt.show()
+    plt.savefig(plot_file)
 
 def run_HMM_pomegranade(AD,DP,numstates):
     pass
@@ -67,7 +68,8 @@ def run_HMM(AD,DP,numstates):
     model = hmm.GaussianHMM(
         n_components=numstates,
         init_params='m',
-        params='m')
+        params='m',
+        n_iter=100,)
     model.startprob_ = start_prob
     model.transmat_ = trans_prob
     model.covars_ = covariance
