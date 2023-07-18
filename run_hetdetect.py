@@ -33,6 +33,8 @@ if __name__ == "__main__":
                                   metavar="DIRECTORY")
     parser.add_argument("--nohmm", dest="nohmm", action='store_true', default=False,
                                   help="turn off hmm genotyping")
+    parser.add_argument("--g", dest="gpu", action='store_true', default=False,
+                                  help="turn on gpu usage")
     parser.add_argument("-c", "--compress", dest="compress", action='store_true', default=False,
                                   help="output compressed VCF files")
     parser.add_argument("-f", "--dpfilter", type=int, dest="dp_filter", default=0,
