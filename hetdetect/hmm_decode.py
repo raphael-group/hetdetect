@@ -34,7 +34,6 @@ def plot_snps(df):
     """
     Creates a scatterplot of het-SNP BAF values.
     """
-    import pdb; pdb.set_trace;
     groups = df.groupby('z')
 
     for name, group in groups:
@@ -56,7 +55,7 @@ def run_HMM_pgt(AD, DP, numstates):
         for x in it:
             if x > 0.5:
                 x[...] = 1 - x
-    BAF = torch.tensor(np.array(baf_full).reshape(-1, 39846, 1)).float().to(device)
+    BAF = torch.tensor(np.array(baf_full).reshape(-1, baf_full.size, 1)).float().to(device)
 
     # BAF_tensor = tf.convert_to_tensor(BAF)
     # print(BAF_tensor)
@@ -74,8 +73,6 @@ def run_HMM_pgt(AD, DP, numstates):
              Normal([0.4], [[0.2]], covariance_type='diag').to(device),
              Normal([0.5], [[0.2]], covariance_type='diag').to(device)]
     
-    print(f"{BAF.dtype}, {start_prob.dtype}, {trans_prob.dtype}")
-
     # create and initialize Gaussian HMM
     model = DenseHMM(distributions=dists, 
                      edges=trans_prob, 
@@ -85,9 +82,9 @@ def run_HMM_pgt(AD, DP, numstates):
     # decode using BAF matrix
     # model.fit(BAF) 
     decoded_states = model.predict(BAF)
-    logprob = model.log_probability(decoded_states)
+    logprob = torch.sum(model.predict_log_proba(BAF))
 
-    decoded_states.to('cpu').numpy().ravel()
+    decoded_states = decoded_states.to('cpu')
     model = model.to('cpu')
     logprob = logprob.to('cpu')
 
@@ -95,12 +92,11 @@ def run_HMM_pgt(AD, DP, numstates):
     means_arr = []
     for d in model.distributions:
         means_arr.append(list(d.means.numpy().ravel()))
-    print(f"means: {means_arr}")
     # print(f"covar: {model.covars_}") 
     # (need to figure out how to print covars with pgt)
 
     # also need to figure out how to get + return "logprob"
-    return logprob, decoded_states, model
+    return logprob, decoded_states, model, means_arr
     
 
 def run_HMM(AD,DP,numstates):

@@ -191,10 +191,12 @@ if __name__ == "__main__":
         ADs = np.array(ADs)
         DPs = np.array(DPs)
         if options.gpu:
-            logprob, decoded_states, model= run_HMM_pgt(ADs, DPs, options.numstates)
+            logprob, decoded_states, model, model_means = run_HMM_pgt(ADs, DPs, options.numstates)
+            model_means = np.array(model_means)
+            decoded_states = decoded_states.numpy().ravel()
         else:
-            logprob, decoded_states, model= run_HMM(ADs, DPs, options.numstates)
-        model_means = model.means_
+            logprob, decoded_states, model = run_HMM(ADs, DPs, options.numstates)
+            model_means = model.means_
         logging.info(f"Log probability for {k}: {logprob}")
         logging.info(f"Decoded states for {k}:  {decoded_states}")
 
