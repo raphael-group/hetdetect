@@ -62,39 +62,39 @@ if __name__ == "__main__":
         logging.info("Input VCF does not have existing genotyping. We are taking DP and AD values from INFO field and start calling")
 
         header = """##fileformat=VCFv4.1
-##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
-##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
-##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths (high-quality bases)">
-##INFO=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
-##INFO=<ID=AD,Number=1,Type=Integer,Description="Allelic depths (high-quality bases)">
-##INFO=<ID=OTH,Number=1,Type=Integer,Description="Other bases">
-##contig=<ID=chr1,length=248956422>
-##contig=<ID=chr2,length=242193529>
-##contig=<ID=chr3,length=198295559>
-##contig=<ID=chr4,length=190214555>
-##contig=<ID=chr5,length=181538259>
-##contig=<ID=chr6,length=170805979>
-##contig=<ID=chr7,length=159345973>
-##contig=<ID=chr8,length=145138636>
-##contig=<ID=chr9,length=138394717>
-##contig=<ID=chr10,length=133797422>
-##contig=<ID=chr11,length=135086622>
-##contig=<ID=chr12,length=133275309>
-##contig=<ID=chr13,length=114364328>
-##contig=<ID=chr14,length=107043718>
-##contig=<ID=chr15,length=101991189>
-##contig=<ID=chr16,length=90338345>
-##contig=<ID=chr17,length=83257441>
-##contig=<ID=chr18,length=80373285>
-##contig=<ID=chr19,length=58617616>
-##contig=<ID=chr20,length=64444167>
-##contig=<ID=chr21,length=46709983>
-##contig=<ID=chr22,length=50818468>
-##contig=<ID=chrX,length=156040895>
-##contig=<ID=chrY,length=57227415>
-##contig=<ID=chrM,length=16569>
-#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample
-"""
+            ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+            ##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
+            ##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths (high-quality bases)">
+            ##INFO=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
+            ##INFO=<ID=AD,Number=1,Type=Integer,Description="Allelic depths (high-quality bases)">
+            ##INFO=<ID=OTH,Number=1,Type=Integer,Description="Other bases">
+            ##contig=<ID=chr1,length=248956422>
+            ##contig=<ID=chr2,length=242193529>
+            ##contig=<ID=chr3,length=198295559>
+            ##contig=<ID=chr4,length=190214555>
+            ##contig=<ID=chr5,length=181538259>
+            ##contig=<ID=chr6,length=170805979>
+            ##contig=<ID=chr7,length=159345973>
+            ##contig=<ID=chr8,length=145138636>
+            ##contig=<ID=chr9,length=138394717>
+            ##contig=<ID=chr10,length=133797422>
+            ##contig=<ID=chr11,length=135086622>
+            ##contig=<ID=chr12,length=133275309>
+            ##contig=<ID=chr13,length=114364328>
+            ##contig=<ID=chr14,length=107043718>
+            ##contig=<ID=chr15,length=101991189>
+            ##contig=<ID=chr16,length=90338345>
+            ##contig=<ID=chr17,length=83257441>
+            ##contig=<ID=chr18,length=80373285>
+            ##contig=<ID=chr19,length=58617616>
+            ##contig=<ID=chr20,length=64444167>
+            ##contig=<ID=chr21,length=46709983>
+            ##contig=<ID=chr22,length=50818468>
+            ##contig=<ID=chrX,length=156040895>
+            ##contig=<ID=chrY,length=57227415>
+            ##contig=<ID=chrM,length=16569>
+            #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample
+            """
         vcf_writer = Writer.from_string(join(options.output_fp, "hetdetect.nohmm.vcf"), header)
         nosampleinput = True
     elif len(vcf_reader.samples) > 1:
@@ -179,7 +179,7 @@ if __name__ == "__main__":
         with open(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"),"r") as f:
             vcf_reader = VCF(f)
             for record in vcf_reader:
-                #sample = record.samples[0]
+                # sample = record.samples[0]
                 # only process het SNPs in HMM
                 if record.genotypes[0][0] != record.genotypes[0][1]:
                     hets += [(record.CHROM, record.POS)]
@@ -233,6 +233,7 @@ if __name__ == "__main__":
         # make plots directory
         if not os.path.exists(join(options.output_fp, "plots")):
             os.mkdir(join(options.output_fp, "plots"))
+        print(join(options.output_fp, 'plots', f'{k}.png'))
         plot_snps(het_df, join(options.output_fp, 'plots', f'{k}.png'))
         logging.info(f"Ploted chromosome {k}")
         
@@ -269,10 +270,3 @@ if __name__ == "__main__":
     logging.info(f"Done writing the output VCF file")
     compress_output_decision()
     os.remove(join(options.output_fp, "hetdetect.nohmm.vcf"))
-    
-    
-    
-            
-            
-
-
