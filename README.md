@@ -13,6 +13,12 @@ HetDetect allows for the inference of hetSNPs. It takes as input
 
 uses _cyvcf2_ to parse the input VCF files, and finally outputs a re-genotyped VCF with the inferred hetSNPs.
 
+It uses a Hidden Markov Model consisting of:
+- a user defined number of hidden states,
+- a fixed, low transition probability matrix (tau = 3*10^-4),
+- a 1D Gaussian emission probability matrix, and
+- LAF as observed states.
+
 It also produces a colored BAF scatterplot, as such:
 ![](/assets/images/chr8.png)
 
