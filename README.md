@@ -22,7 +22,7 @@ It uses a Hidden Markov Model consisting of:
 It also produces a colored BAF scatterplot, as such:
 ![](/assets/images/chr8.png)
 
-These plots can be found in the specific outdirectory provided as input to `run_hetdetect.py`.
+where blue points show the false positive het SNPs that are filtered from the VCF. These plots can be found in the specific outdirectory provided as input to `run_hetdetect.py`.
 
 
 ## Installation
