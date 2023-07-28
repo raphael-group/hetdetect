@@ -41,3 +41,6 @@ These plots can be found in the specific outdirectory provided as input to `run_
 ## :computer:	Using HetDetect
 To run HetDetect, call `python run_hetdetect.py -i [input file path] -o [output file path]` along with any other arguments as necessary.
 
+Run `python run_detect.py -h` to see all the options.
+
+
