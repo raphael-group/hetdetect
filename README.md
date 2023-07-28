@@ -25,6 +25,12 @@ It also produces a colored BAF scatterplot, as such:
 These plots can be found in the specific outdirectory provided as input to `run_hetdetect.py`.
 
 
+## Installation
+
+- Clone the repository and change directory
+- Run `pip3 install -e .`
+
+
 ## :pushpin:	Features
 - **_GPU usage_**. For accelerated performance using pomegranate, PyTorch, and CUDA GPU, users can specify if they would like to run the model with tensors on GPU with the option `--g`. 
 - **_User defined number of hidden states_**. Users can customize the HMM to define any number of hidden states corresponding to the number of mean/covariance pairs that the model will infer.
