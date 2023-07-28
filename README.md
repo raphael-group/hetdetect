@@ -7,7 +7,7 @@ Authors: Melody Choi, Metin Balaban, Ben Raphael
 
 ## :microscope:	Overview
 HetDetect allows for the inference of hetSNPs. It takes as input
-- any VCF file,
+- any VCF file (bcftools, cellSNPlite),
 - a specified output path,
 - any additional arguments,
 
