@@ -25,7 +25,7 @@ It also produces a colored BAF scatterplot, as such:
 where blue points show the false positive het SNPs that are filtered from the VCF. These plots can be found in the specific outdirectory provided as input to `run_hetdetect.py`.
 
 
-## Installation
+## :bulb:	Installation
 
 - Clone the repository and change directory
 - Run `pip3 install -e .`
