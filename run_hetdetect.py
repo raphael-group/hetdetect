@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import logging
 import argparse
-import os 
+import os
+from pathlib import Path 
 from cyvcf2 import VCF, Writer
 import shutil
 from hetdetect.hmm_decode import plot_snps, run_HMM
@@ -10,7 +11,7 @@ from os.path import join
 import numpy as np
 import scipy
 import pandas as pd
-import importlib.resources
+
 
 def compress_output_decision():
     if options.compress:
@@ -62,7 +63,8 @@ if __name__ == "__main__":
     if len(vcf_reader.samples) <= 0:
         logging.info("Input VCF does not have existing genotyping. We are taking DP and AD values from INFO field and start calling")
 
-        headerpth = importlib.resources.path('hetdetect.resources', "header.txt")
+        headerpth = Path(__file__).parent/ "hetdetect" / "resources" / "header.txt"
+        #headerpth = importlib.resources.path('hetdetect.resources', "header.txt")
         header = open(headerpth, "r").read()
         vcf_writer = Writer.from_string(join(options.output_fp, "hetdetect.nohmm.vcf"), header)
         nosampleinput = True
