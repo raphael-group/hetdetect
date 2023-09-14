@@ -2,7 +2,7 @@
 import logging
 import argparse
 import os
-from pathlib import Path 
+from pathlib import Path
 from cyvcf2 import VCF, Writer
 import shutil
 from hetdetect.hmm_decode import plot_snps, run_HMM
@@ -15,45 +15,96 @@ import pandas as pd
 
 def compress_output_decision():
     if options.compress:
-        logging.info(f"Compressing output VCF files")
+        logging.info('Compressing output VCF files')
         os.system(f"bgzip -f {join(options.output_fp, 'hetdetect.vcf')}")
         for k in bychrom_writers.keys():
             os.system(f"bgzip -f {join(options.output_fp, 'bychrom', f'{k}.vcf')}")
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     root = logging.getLogger()
     root.setLevel(logging.INFO)
 
     # Input arguments parser
-    parser = argparse.ArgumentParser(description='VCF file genotyper with increased robustness to allelic imbalance due to mutogenesis',
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('-v', '--version', action='store_true', help='print the current version')
-    parser.add_argument("-i", "--input", dest="input_fp",
-                                  help="path to the input VCF file", metavar="FILE")
-    parser.add_argument("-o", "--output", dest="output_fp",
-                                  help="path for the output directory where files will be placed",
-                                  metavar="DIRECTORY")
-    parser.add_argument("--nohmm", dest="nohmm", action='store_true', default=False,
-                                  help="turn off hmm genotyping")
-    parser.add_argument("--g", dest="gpu", action='store_true', default=False,
-                                  help="turn on gpu usage")
-    parser.add_argument("-c", "--compress", dest="compress", action='store_true', default=False,
-                                  help="output compressed VCF files")
-    parser.add_argument("-f", "--dpfilter", type=int, dest="dp_filter", default=0,
-                                  help="minimum sequencing depth (DP) needed to include in the output VCF file(s)"
-                                       , metavar="NUMBER")
-    parser.add_argument("-n", "--numstates", type=int, dest="numstates", default=5,
-                                  help="the number of HMM states to fit the data"
-                                       , metavar="NUMBER")
-    parser.add_argument("-T", "--threads", type=int, dest="num_thread", default=0,
-                                  help="number of cores. " )       
+    parser = argparse.ArgumentParser(
+        description='VCF file genotyper with increased robustness to '
+        'allelic imbalance due to mutogenesis',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        '-v',
+        '--version',
+        action='store_true',
+        help='print the current version',
+    )
+    parser.add_argument(
+        '-i',
+        '--input',
+        dest='input_fp',
+        help='path to the input VCF file',
+        metavar='FILE',
+    )
+    parser.add_argument(
+        '-o',
+        '--output',
+        dest='output_fp',
+        help='path for the output directory where files will be placed',
+        metavar='DIRECTORY',
+    )
+    parser.add_argument(
+        '--nohmm',
+        dest='nohmm',
+        action='store_true',
+        default=False,
+        help='turn off hmm genotyping',
+    )
+    parser.add_argument(
+        '--g',
+        dest='gpu',
+        action='store_true',
+        default=False,
+        help='turn on gpu usage',
+    )
+    parser.add_argument(
+        '-c',
+        '--compress',
+        dest='compress',
+        action='store_true',
+        default=False,
+        help='output compressed VCF files',
+    )
+    parser.add_argument(
+        '-f',
+        '--dpfilter',
+        type=int,
+        dest='dp_filter',
+        default=0,
+        help='minimum sequencing depth (DP) needed to include in the output VCF file(s)',
+        metavar='NUMBER',
+    )
+    parser.add_argument(
+        '-n',
+        '--numstates',
+        type=int,
+        dest='numstates',
+        default=5,
+        help='the number of HMM states to fit the data',
+        metavar='NUMBER',
+    )
+    parser.add_argument(
+        '-T',
+        '--threads',
+        type=int,
+        dest='num_thread',
+        default=0,
+        help='number of cores. ',
+    )
 
     options = parser.parse_args()
 
     if options.version:
-            print("hetdetect version " + __version__, flush=True)
-            exit(0)                           
-
+        print('hetdetect version ' + __version__, flush=True)
+        exit(0)
 
     vcf_reader = VCF(options.input_fp)
     if not os.path.exists(options.output_fp):
@@ -61,93 +112,117 @@ if __name__ == "__main__":
 
     nosampleinput = False
     if len(vcf_reader.samples) <= 0:
-        logging.info("Input VCF does not have existing genotyping. We are taking DP and AD values from INFO field and start calling")
+        logging.info(
+            'Input VCF does not have existing genotyping. '
+            'We are taking DP and AD values from INFO field and start calling'
+        )
 
-        headerpth = Path(__file__).parent/ "hetdetect" / "resources" / "header.txt"
-        #headerpth = importlib.resources.path('hetdetect.resources', "header.txt")
-        header = open(headerpth, "r").read()
-        vcf_writer = Writer.from_string(join(options.output_fp, "hetdetect.nohmm.vcf"), header)
+        headerpth = Path(__file__).parent / 'hetdetect' / 'resources' / 'header.txt'
+        # headerpth = importlib.resources.path('hetdetect.resources', "header.txt")
+        header = open(headerpth, 'r').read()
+        vcf_writer = Writer.from_string(join(options.output_fp, 'hetdetect.nohmm.vcf'), header)
         nosampleinput = True
     elif len(vcf_reader.samples) > 1:
-        logging.ERROR("We currently only support single sample VCF files")
+        logging.ERROR('We currently only support single sample VCF files')
         exit(1)
     else:
-        vcf_writer = Writer(join(options.output_fp, "hetdetect.nohmm.vcf"), vcf_reader)
-    
-    if not os.path.exists(join(options.output_fp, "bychrom")):
-        os.mkdir(join(options.output_fp, "bychrom"))
-    bychrom_writers = dict()
+        vcf_writer = Writer(join(options.output_fp, 'hetdetect.nohmm.vcf'), vcf_reader)
 
+    if not os.path.exists(join(options.output_fp, 'bychrom')):
+        os.mkdir(join(options.output_fp, 'bychrom'))
+    bychrom_writers = dict()
 
     def write_record(record):
         vcf_writer.write_record(record)
-        # In addition to the main vcf output file, we write each chromosome separately to individual files
+        # In addition to the main vcf output file, '
+        # 'we write each chromosome separately to individual files
         if record.CHROM not in bychrom_writers:
-                if nosampleinput:
-                    bychrom_writers[record.CHROM] = Writer.from_string(join(options.output_fp, "bychrom",f"{record.CHROM}.nohmm.vcf"), header)
-                else:
-                    bychrom_writers[record.CHROM] = Writer(join(options.output_fp, "bychrom",f"{record.CHROM}.nohmm.vcf"), vcf_reader)
+            if nosampleinput:
+                bychrom_writers[record.CHROM] = Writer.from_string(
+                    join(
+                        options.output_fp,
+                        'bychrom',
+                        f'{record.CHROM}.nohmm.vcf',
+                    ),
+                    header,
+                )
+            else:
+                bychrom_writers[record.CHROM] = Writer(
+                    join(
+                        options.output_fp,
+                        'bychrom',
+                        f'{record.CHROM}.nohmm.vcf',
+                    ),
+                    vcf_reader,
+                )
         bychrom_writers[record.CHROM].write_record(record)
 
-    logging.info("Re-genotyping without HMM")
-    #re-genotyping AD > 0 & DP-AD > 0 as 0/1
+    logging.info('Re-genotyping without HMM')
+    # re-genotyping AD > 0 & DP-AD > 0 as 0/1
     for record in vcf_reader:
-        if record.num_unknown > 0: # 0 REF and 0 ALT
+        if record.num_unknown > 0:   # 0 REF and 0 ALT
             continue
         if nosampleinput:
-            #save all record fields into separate variables
-            CHROM=record.CHROM
-            POS=record.POS
-            ID="."
-            REF=record.REF
-            ALT=record.ALT[0]
-            QUAL="."
-            FILTER=record.FILTERS[0]
-            DP=record.INFO["DP"]
-            AD=record.INFO["AD"]
+            # save all record fields into separate variables
+            CHROM = record.CHROM
+            POS = record.POS
+            ID = '.'
+            REF = record.REF
+            ALT = record.ALT[0]
+            QUAL = '.'
+            FILTER = record.FILTERS[0]
+            DP = record.INFO['DP']
+            AD = record.INFO['AD']
             ADs = [int(DP) - int(AD)]
             if int(AD) > 0:
                 ADs.append(int(AD))
-            ADstring = ",".join([str(x) for x in ADs])
-            OTH = record.INFO["OTH"]
-            FORMAT="GT:DP:AD"
-            sample=f"0/0:{DP}:{ADstring}"
+            ADstring = ','.join([str(x) for x in ADs])
+            OTH = record.INFO['OTH']
+            FORMAT = 'GT:DP:AD'
+            sample = f'0/0:{DP}:{ADstring}'
             # converting from cellsnplite format to bcftools format temporarily
-            record = vcf_writer.variant_from_string(f"{CHROM}\t{POS}\t{ID}\t{REF}\t{ALT}\t{QUAL}\t{FILTER}\tDP={DP};AD={ADstring};OTH={OTH}\t{FORMAT}\t{sample}")
+            record = vcf_writer.variant_from_string(
+                f'{CHROM}\t{POS}\t{ID}\t{REF}\t{ALT}\t{QUAL}\t{FILTER}\t'
+                'DP={DP};AD={ADstring};OTH={OTH}\t{FORMAT}\t{sample}'
+            )
 
-        if type(record.INFO.get("AD")) == int:
-            write_record(record)           
+        if type(record.INFO.get('AD')) == int:
+            write_record(record)
             continue
-        REF, ALT = record.INFO.get("AD")[0:2]
+        REF, ALT = record.INFO.get('AD')[0:2]
         if REF > 0 and ALT > 0:
-            record.genotypes = np.array([[0,1,False]])
+            record.genotypes = np.array([[0, 1, False]])
         elif REF == 0 and ALT > 0:
-            record.genotypes = np.array([[1,1,False]])
+            record.genotypes = np.array([[1, 1, False]])
         else:
-            record.genotypes = np.array([[0,0,False]])
+            record.genotypes = np.array([[0, 0, False]])
         write_record(record)
 
     vcf_writer.close()
-    for k,v in bychrom_writers.items():
+    for k, v in bychrom_writers.items():
         v.close()
 
     if options.nohmm:
         # move temporary files to output file names since we won't run HMM
-        logging.info("Writing noHMM genotypes into the output file.")
-        shutil.move(join(options.output_fp, "hetdetect.nohmm.vcf"),
-                    join(options.output_fp, "hetdetect.vcf"))
+        logging.info('Writing noHMM genotypes into the output file.')
+        shutil.move(
+            join(options.output_fp, 'hetdetect.nohmm.vcf'),
+            join(options.output_fp, 'hetdetect.vcf'),
+        )
         for k, _ in bychrom_writers.items():
-            shutil.move(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"),
-                        join(options.output_fp, "bychrom",f"{k}.vcf"))
+            shutil.move(
+                join(options.output_fp, 'bychrom', f'{k}.nohmm.vcf'),
+                join(options.output_fp, 'bychrom', f'{k}.vcf'),
+            )
         compress_output_decision()
         exit(0)
 
     def hmm_genotyper(k):
-        logging.info(f"HMM genotyping chromosome {k}.")
+        logging.info(f'HMM genotyping chromosome {k}.')
         hets = []
         ADs = []
         DPs = []
-        with open(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"),"r") as f:
+        with open(join(options.output_fp, 'bychrom', f'{k}.nohmm.vcf'), 'r') as f:
             vcf_reader = VCF(f)
             for record in vcf_reader:
                 # sample = record.samples[0]
@@ -155,18 +230,18 @@ if __name__ == "__main__":
                 if record.genotypes[0][0] != record.genotypes[0][1]:
                     hets += [(record.CHROM, record.POS)]
                     # get DP and AD. These can be lists or integers, so being careful here
-                    REF, ALT = record.INFO.get("AD")[0:2]
+                    REF, ALT = record.INFO.get('AD')[0:2]
                     DP = REF + ALT
                     AD = ALT
                     ADs.append(AD)
                     DPs.append(DP)
-        logging.info(f"Running Baum-Welch for chromosome {k}.")
+        logging.info(f'Running Baum-Welch for chromosome {k}.')
         ADs = np.array(ADs)
         DPs = np.array(DPs)
-        logprob, decoded_states, model= run_HMM(ADs, DPs, options.numstates)
+        logprob, decoded_states, model = run_HMM(ADs, DPs, options.numstates)
         model_means = model.means_
-        logging.info(f"Log probability for {k}: {logprob}")
-        logging.info(f"Decoded states for {k}:  {decoded_states}")
+        logging.info(f'Log probability for {k}: {logprob}')
+        logging.info(f'Decoded states for {k}:  {decoded_states}')
 
         # run binomial test and regenotype het SNPs as homozygous if pvalue is below the threshold
         # we use the inferred hidden state's mean as binomial test p parameter
@@ -177,67 +252,67 @@ if __name__ == "__main__":
             Bk = min(AD, DP - AD)
             Bn = DP
             Bp = float(model_means[state])
-            if (Bk,Bn,Bp) in testSave:
-                p_value = testSave[(Bk,Bn,Bp)] 
+            if (Bk, Bn, Bp) in testSave:
+                p_value = testSave[(Bk, Bn, Bp)]
             else:
-                p_value = scipy.stats.binomtest(Bk, 
-                                n=Bn, 
-                                p=Bp, 
-                                alternative='less').pvalue
-                testSave[(Bk,Bn,Bp)] = p_value
+                p_value = scipy.stats.binomtest(Bk, n=Bn, p=Bp, alternative='less').pvalue
+                testSave[(Bk, Bn, Bp)] = p_value
             if p_value < 0.025:
                 if AD < DP - AD:
-                    newGTs.append([0,0,False])
-                    decoded_states[j] = -1 # mark as false het
+                    newGTs.append([0, 0, False])
+                    decoded_states[j] = 9   # mark as false het
                 else:
-                    newGTs.append([1,1,False])
-                    decoded_states[j] = -1 # mark as false het  
+                    newGTs.append([1, 1, False])
+                    decoded_states[j] = 9   # mark as false het
             else:
-                newGTs.append([0,1,False]) 
-        
+                newGTs.append([0, 1, False])
+
         newGTdict = dict(zip(hets, newGTs))
-        logging.info("Done with the binomial test")
+        logging.info('Done with the binomial test')
         # plot het SNPs
-        het_df = pd.DataFrame({'x': np.array([het[1] for het in hets]),
-                    'y': np.divide(ADs, DPs),
-                    'z': decoded_states})
+        het_df = pd.DataFrame(
+            {
+                'x': np.array([het[1] for het in hets]),
+                'y': np.divide(ADs, DPs),
+                'z': decoded_states,
+            }
+        )
         # make plots directory
-        if not os.path.exists(join(options.output_fp, "plots")):
-            os.mkdir(join(options.output_fp, "plots"))
+        if not os.path.exists(join(options.output_fp, 'plots')):
+            os.mkdir(join(options.output_fp, 'plots'))
         print(join(options.output_fp, 'plots', f'{k}.png'))
         plot_snps(het_df, join(options.output_fp, 'plots', f'{k}.png'))
-        logging.info(f"Ploted chromosome {k}")
-        
+        logging.info(f'Ploted chromosome {k}')
+
         # write output files by reading the temporrary "nohmm" file and overwrite the genotypes
-        with open(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"),"r") as f:
+        with open(join(options.output_fp, 'bychrom', f'{k}.nohmm.vcf'), 'r') as f:
             vcf_reader = VCF(f)
-            vcf_writer = Writer(join(options.output_fp, "bychrom",f"{k}.vcf"), vcf_reader)
+            vcf_writer = Writer(join(options.output_fp, 'bychrom', f'{k}.vcf'), vcf_reader)
             for record in vcf_reader:
                 index = (record.CHROM, record.POS)
                 if index in newGTdict:
                     record.genotypes = np.array([newGTdict[index]])
                 vcf_writer.write_record(record)
             vcf_writer.close()
-        logging.info(f"New HMM genotypes are written for chromosome {k}")
-        os.remove(join(options.output_fp, "bychrom",f"{k}.nohmm.vcf"))
-                
+        logging.info(f'New HMM genotypes are written for chromosome {k}')
+        os.remove(join(options.output_fp, 'bychrom', f'{k}.nohmm.vcf'))
 
     # can be made multithreaded using pool
     for k, _ in bychrom_writers.items():
         hmm_genotyper(k)
-    
-    logging.info(f"Combining individual chromosome VCFs into one")
+
+    logging.info('Combining individual chromosome VCFs into one')
     # combine individual chromosome VCFs and write to the main output VCF
-    with open(join(options.output_fp, "hetdetect.nohmm.vcf"),"r") as output_main_nohmm_fp:
+    with open(join(options.output_fp, 'hetdetect.nohmm.vcf'), 'r') as output_main_nohmm_fp:
         vcf_reader = VCF(output_main_nohmm_fp)
         # using output_main_nohmm_fp header as template
-        vcf_writer = Writer(join(options.output_fp, "hetdetect.vcf"), vcf_reader)
+        vcf_writer = Writer(join(options.output_fp, 'hetdetect.vcf'), vcf_reader)
         for k in bychrom_writers.keys():
-            with open(join(options.output_fp, "bychrom",f"{k}.vcf"),"r") as f:
+            with open(join(options.output_fp, 'bychrom', f'{k}.vcf'), 'r') as f:
                 vcf_reader = VCF(f)
                 for record in vcf_reader:
                     vcf_writer.write_record(record)
         vcf_writer.close()
-    logging.info(f"Done writing the output VCF file")
+    logging.info('Done writing the output VCF file')
     compress_output_decision()
-    os.remove(join(options.output_fp, "hetdetect.nohmm.vcf"))
+    os.remove(join(options.output_fp, 'hetdetect.nohmm.vcf'))
