@@ -190,9 +190,9 @@ if __name__ == '__main__':
             write_record(record)
             continue
         REF, ALT = record.INFO.get('AD')[0:2]
-        if REF > 0 and ALT > 0:
+        if min(REF,ALT)/(REF+ALT) > 0.05:
             record.genotypes = np.array([[0, 1, False]])
-        elif REF == 0 and ALT > 0:
+        elif ALT > REF:
             record.genotypes = np.array([[1, 1, False]])
         else:
             record.genotypes = np.array([[0, 0, False]])
@@ -260,10 +260,10 @@ if __name__ == '__main__':
             if p_value < 0.025:
                 if AD < DP - AD:
                     newGTs.append([0, 0, False])
-                    decoded_states[j] = 9   # mark as false het
+                    decoded_states[j] = -1   # mark as false het
                 else:
                     newGTs.append([1, 1, False])
-                    decoded_states[j] = 9   # mark as false het
+                    decoded_states[j] = -1   # mark as false het
             else:
                 newGTs.append([0, 1, False])
 

@@ -16,7 +16,7 @@ def filter_false_snps(sequence, AD, DP):
     Filters and creates a new state for falsely-labeled het SNPs.
     """
 
-    # for each het SNP, change decoded state to 5 if p_val < 0.05
+    # for each het SNP, change decoded state to 1 if p_val < 0.05
     # these states are likely falsely-labeled het SNPs
     for i in range(len(sequence)):
         p_value = scipy.stats.binomtest(
@@ -26,7 +26,7 @@ def filter_false_snps(sequence, AD, DP):
             alternative='less',
         ).pvalue
         if p_value < 0.05:
-            sequence[i] = 5
+            sequence[i] = -1
     return sequence
 
 
@@ -35,7 +35,7 @@ def plot_snps(df, plot_file):
     Creates a scatterplot of het-SNP BAF values.
     """
     # import pdb; pdb.set_trace;
-    groups = df.groupby('z')
+    groups = df.groupby('z', sort=True)
 
     for name, group in groups:
         print(name, len(group))
@@ -71,7 +71,7 @@ def run_HMM(AD, DP, numstates):
 
     # set probability matrices, mean, covariance
     start_prob = np.array([1] * numstates) / numstates
-    tau = 1 / 30000
+    tau = 1/1000000000000
     trans_prob = np.full((numstates, numstates), tau)
     np.fill_diagonal(trans_prob, 1 - (numstates - 1) * tau)
     covariance = np.array([[0.2]] * numstates)
